@@ -129,7 +129,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif key == "kategori":
         context.user_data["kategori"] = value
         await query.edit_message_text(
-            "📍 Sila taip lokasi kerosakan (contoh: Kelas 5 Amanah, Makmal Komputer):"
+            "📍 Sila taip lokasi kerosakan (contoh: Kelas 5 Amber, Makmal Komputer):"
         )
         context.user_data["step"] = "lokasi"
 
