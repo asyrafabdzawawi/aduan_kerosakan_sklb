@@ -1,3 +1,4 @@
+import pytz
 import os
 import json
 from datetime import datetime
@@ -184,10 +185,13 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.remove(filename)
 
         # TIMESTAMP
-        now = datetime.now()
+        tz = pytz.timezone("Asia/Kuala_Lumpur")
+        now = datetime.now(tz)
+
         timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
         tarikh = now.strftime("%d/%m/%Y")
         masa = now.strftime("%I:%M %p")
+
 
         # AUTO ID ADUAN
         total = len(sheet.get_all_values())
