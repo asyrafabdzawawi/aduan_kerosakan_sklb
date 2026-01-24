@@ -49,23 +49,39 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 
 
 # ==================================================
+# PAPAR MENU UTAMA (INLINE)
+# ==================================================
+async def papar_menu(update, context):
+    keyboard = [
+        [InlineKeyboardButton("🛠️ Buat Aduan Kerosakan", callback_data="menu|aduan")],
+        [InlineKeyboardButton("📋 Semak Status Aduan", callback_data="menu|status")]
+    ]
+
+    reply_keyboard = [[KeyboardButton("🏠 Menu Utama")]]
+    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+
+    await update.message.reply_text(
+        "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
+        "Sila pilih menu di bawah:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+
+# ==================================================
 # /start
 # ==================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
+    await papar_menu(update, context)
 
-    reply_keyboard = [
-        [KeyboardButton("🛠️ Buat Aduan Kerosakan")],
-        [KeyboardButton("📋 Semak Status Aduan")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=False)
 
-    await update.message.reply_text(
-        "🤖 *Sistem Aduan Kerosakan Sekolah*\n\n"
-        "Tekan butang di bawah untuk membuat aduan atau semak status aduan.",
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
+# ==================================================
+# MENU UTAMA (BUTANG BAWAH TYPING)
+# ==================================================
+async def menu_utama(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await papar_menu(update, context)
 
 
 # ==================================================
@@ -74,7 +90,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def buat_aduan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton(k, callback_data=f"kategori|{k}")] for k in KATEGORI_LIST]
 
-    await update.message.reply_text(
+    await update.callback_query.edit_message_text(
         "🛠️ Pilih kategori kerosakan:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -87,7 +103,7 @@ async def semak_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     context.user_data["step"] = "semak_id"
 
-    await update.message.reply_text(
+    await update.callback_query.edit_message_text(
         "📋 Sila masukkan ID Aduan anda\n\nContoh: A0023"
     )
 
@@ -102,7 +118,15 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key, *rest = query.data.split("|")
     value = rest[0] if rest else None
 
-    if key == "kategori":
+    # ---- MENU UTAMA INLINE ----
+    if key == "menu":
+        if value == "aduan":
+            await buat_aduan(update, context)
+        elif value == "status":
+            await semak_status(update, context)
+
+    # ---- FLOW ADUAN ASAL ----
+    elif key == "kategori":
         context.user_data["kategori"] = value
         await query.edit_message_text(
             "📍 Sila taip lokasi kerosakan (contoh: Kelas 5 Amanah, Makmal Komputer):"
@@ -132,14 +156,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-    # ---------- FLOW SEMAK STATUS (BARU) ----------
+    # ---------- FLOW SEMAK STATUS ----------
     elif step == "semak_id":
         id_cari = update.message.text.strip().upper()
 
         records = sheet.get_all_values()
         jumpa = False
 
-        for row in records[1:]:  # skip header
+        for row in records[1:]:
             if row[0] == id_cari:
                 jumpa = True
 
@@ -184,14 +208,13 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         image_url = blob.generate_signed_url(version="v4", expiration=60*60*24*7, method="GET")
         os.remove(filename)
 
-        # TIMESTAMP
+        # TIMESTAMP (MALAYSIA)
         tz = pytz.timezone("Asia/Kuala_Lumpur")
         now = datetime.now(tz)
 
         timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
         tarikh = now.strftime("%d/%m/%Y")
         masa = now.strftime("%I:%M %p")
-
 
         # AUTO ID ADUAN
         total = len(sheet.get_all_values())
@@ -237,8 +260,7 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🏠 Menu Utama$"), menu_utama))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.add_handler(MessageHandler(filters.PHOTO, gambar))
