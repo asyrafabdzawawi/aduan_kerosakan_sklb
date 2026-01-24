@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 # CONFIG
 # ==================================================
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-SHEET_ID = "PASTE_SHEET_ID_ADUAN_DI_SINI"
+SHEET_ID = "1j9ZKSju8r-tcRitKKCAY-RGKH4jUeczgsVpecEJwgvI"
 FIREBASE_BUCKET = "relief-31bc6.firebasestorage.app"   # guna bucket sama
 
 
