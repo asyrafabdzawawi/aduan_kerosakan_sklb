@@ -49,20 +49,14 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 
 
 # ==================================================
-# PAPAR MENU UTAMA (INLINE + REPLY KEYBOARD BETUL)
+# PAPAR MENU UTAMA (INLINE + TEKS ARAHAN HOME)
 # ==================================================
 async def papar_menu(update, context):
-    # 1. SET REPLY KEYBOARD (BAWAH TYPING)
+    # REPLY KEYBOARD (BAWAH TYPING - 1 BUTANG SAHAJA)
     reply_keyboard = [[KeyboardButton("🏠 Menu Utama")]]
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
-    await update.message.reply_text(
-        "🏠 *Menu Utama*",
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-
-    # 2. PAPAR INLINE MENU (DALAM MESEJ)
+    # INLINE MENU
     keyboard = [
         [InlineKeyboardButton("🛠️ Buat Aduan Kerosakan", callback_data="menu|aduan")],
         [InlineKeyboardButton("📋 Semak Status Aduan", callback_data="menu|status")]
@@ -70,10 +64,18 @@ async def papar_menu(update, context):
 
     await update.message.reply_text(
         "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
-        "Sila pilih menu di bawah:",
+        "Sila pilih menu di bawah:\n",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+
+    await update.message.reply_text(
+        "👇 *Menu Utama*\n\n"
+        "🏠 _Sila tekan butang di bawah untuk kembali ke menu utama._",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
+
 
 
 
