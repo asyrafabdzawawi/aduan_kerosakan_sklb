@@ -17,7 +17,7 @@ from google.oauth2.service_account import Credentials
 # ==================================================
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 SHEET_ID = "1j9ZKSju8r-tcRitKKCAY-RGKH4jUeczgsVpecEJwgvI"
-FIREBASE_BUCKET = "relief-31bc6.firebasestorage.app"   # guna bucket sama
+FIREBASE_BUCKET = "relief-31bc6.firebasestorage.app"
 
 
 # ==================================================
@@ -53,11 +53,15 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
 
-    reply_keyboard = [[KeyboardButton("🛠️ Buat Aduan Kerosakan")]]
+    reply_keyboard = [
+        [KeyboardButton("🛠️ Buat Aduan Kerosakan")],
+        [KeyboardButton("📋 Semak Status Aduan")]
+    ]
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=False)
 
     await update.message.reply_text(
-        "🤖 *Sistem Aduan Kerosakan Sekolah*\n\nTekan butang di bawah untuk membuat aduan.",
+        "🤖 *Sistem Aduan Kerosakan Sekolah*\n\n"
+        "Tekan butang di bawah untuk membuat aduan atau semak status aduan.",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -76,6 +80,18 @@ async def buat_aduan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
+# MULA SEMAK STATUS
+# ==================================================
+async def semak_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    context.user_data["step"] = "semak_id"
+
+    await update.message.reply_text(
+        "📋 Sila masukkan ID Aduan anda\n\nContoh: A0023"
+    )
+
+
+# ==================================================
 # CALLBACK FLOW
 # ==================================================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,16 +103,19 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if key == "kategori":
         context.user_data["kategori"] = value
-        await query.edit_message_text("📍 Sila taip lokasi kerosakan (contoh: Kelas 5 Amanah, Makmal Komputer):")
-
+        await query.edit_message_text(
+            "📍 Sila taip lokasi kerosakan (contoh: Kelas 5 Amanah, Makmal Komputer):"
+        )
         context.user_data["step"] = "lokasi"
 
+
 # ==================================================
-# TEXT HANDLER (LOKASI & KETERANGAN)
+# TEXT HANDLER (LOKASI, KETERANGAN & SEMAK STATUS)
 # ==================================================
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("step")
 
+    # ---------- FLOW ADUAN (ASAL - TAK DIUBAH) ----------
     if step == "lokasi":
         context.user_data["lokasi"] = update.message.text
         context.user_data["step"] = "keterangan"
@@ -107,7 +126,40 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["keterangan"] = update.message.text
         context.user_data["step"] = "gambar"
 
-        await update.message.reply_text("📸 Sila hantar **1 gambar** kerosakan (wajib).", parse_mode="Markdown")
+        await update.message.reply_text(
+            "📸 Sila hantar **1 gambar** kerosakan (wajib).",
+            parse_mode="Markdown"
+        )
+
+    # ---------- FLOW SEMAK STATUS (BARU) ----------
+    elif step == "semak_id":
+        id_cari = update.message.text.strip().upper()
+
+        records = sheet.get_all_values()
+        jumpa = False
+
+        for row in records[1:]:  # skip header
+            if row[0] == id_cari:
+                jumpa = True
+
+                await update.message.reply_text(
+                    f"📋 *Status Aduan*\n\n"
+                    f"🆔 ID Aduan : {row[0]}\n"
+                    f"📅 Tarikh  : {row[2]}\n"
+                    f"⏰ Masa    : {row[3]}\n"
+                    f"🛠️ Kategori: {row[6]}\n"
+                    f"📍 Lokasi : {row[7]}\n"
+                    f"📌 Status : *{row[10]}*",
+                    parse_mode="Markdown"
+                )
+                break
+
+        if not jumpa:
+            await update.message.reply_text(
+                "❌ ID Aduan tidak dijumpai.\n\nPastikan ID betul, contoh: A0023"
+            )
+
+        context.user_data.clear()
 
 
 # ==================================================
@@ -182,6 +234,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.add_handler(MessageHandler(filters.PHOTO, gambar))
