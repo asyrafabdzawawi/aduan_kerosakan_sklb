@@ -245,7 +245,7 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.get("lokasi"),
             context.user_data.get("keterangan"),
             image_url,
-            "Menunggu tindakan pentadbir."
+            "Dalam proses"
         ]])
 
         context.user_data.clear()
