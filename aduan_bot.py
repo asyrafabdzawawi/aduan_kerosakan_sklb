@@ -6,6 +6,8 @@ from datetime import datetime
 from urllib.parse import urlparse, unquote
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
+from reportlab.platypus import KeepTogether
+
 
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
@@ -193,14 +195,16 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
     for row in data_bulan:
 
-        elements.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
-        elements.append(Spacer(1, 6))
-        elements.append(Paragraph(f"ID Aduan : {row[0]}", styles["Normal"]))
-        elements.append(Paragraph(f"Tarikh   : {row[2]}", styles["Normal"]))
-        elements.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
-        elements.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
-        elements.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
-        elements.append(Spacer(1, 8))
+        aduan_block = []
+
+        aduan_block.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
+        aduan_block.append(Spacer(1, 6))
+        aduan_block.append(Paragraph(f"ID Aduan : {row[0]}", styles["Normal"]))
+        aduan_block.append(Paragraph(f"Tarikh   : {row[2]}", styles["Normal"]))
+        aduan_block.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
+        aduan_block.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
+        aduan_block.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
+        aduan_block.append(Spacer(1, 8))
 
         try:
             image_url = row[10]
@@ -214,17 +218,21 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
             image_stream = BytesIO(image_bytes)
             img = Image(image_stream, width=180, height=120)
-            elements.append(img)
+            aduan_block.append(img)
 
         except Exception as e:
             print("ERROR GAMBAR:", e)
-            elements.append(
+            aduan_block.append(
                 Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"])
             )
 
-        elements.append(Spacer(1, 15))
-        elements.append(Paragraph("--------------------------------------------------", styles["Normal"]))
-        elements.append(Spacer(1, 20))
+        aduan_block.append(Spacer(1, 15))
+        aduan_block.append(Paragraph("--------------------------------------------------", styles["Normal"]))
+        aduan_block.append(Spacer(1, 20))
+
+    # 🔥 INI PENTING
+        elements.append(KeepTogether(aduan_block))
+
 
     doc.build(
         elements,
@@ -239,9 +247,8 @@ async def jana_laporan_pdf(update, bulan_pilih):
 def add_footer(canvas_obj, doc):
     canvas_obj.saveState()
 
-    footer_text_1 = "Sistem Aduan Kerosakan SK Labu Besar"
-    footer_text_2 = "Sinergi Ke Arah Lonjakan Bestari"
-    footer_text_3 = "#LabuBest"
+    footer_text_1 = "Sinergi Ke Arah Lonjakan Bestari"
+    footer_text_2 = "#LabuBest"
 
     width, height = A4
 
@@ -253,7 +260,6 @@ def add_footer(canvas_obj, doc):
     # Text footer
     canvas_obj.drawCentredString(width / 2, 45, footer_text_1)
     canvas_obj.drawCentredString(width / 2, 35, footer_text_2)
-    canvas_obj.drawCentredString(width / 2, 25, footer_text_3)
 
     # Nombor muka surat
     page_number_text = f"Halaman {doc.page}"
