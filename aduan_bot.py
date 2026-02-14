@@ -31,7 +31,6 @@ from reportlab.lib.utils import ImageReader
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 SHEET_ID = "1j9ZKSju8r-tcRitKKCAY-RGKH4jUeczgsVpecEJwgvI"
 FIREBASE_BUCKET = "relief-31bc6.firebasestorage.app"
-"
 
 
 # ==================================================
