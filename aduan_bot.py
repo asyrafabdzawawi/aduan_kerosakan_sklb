@@ -247,8 +247,15 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         id_aduan = f"A{str(total).zfill(4)}"
 
-        image_formula = f'=IMAGE("{image_url}")'
-        hyperlink_formula = f'=HYPERLINK("{image_url}","Klik Gambar")'
+        # Tentukan row yang akan dimasukkan (sentiasa index=2)
+        insert_index = 2
+
+        # Column K = Link Gambar
+        link_column_letter = "K"
+
+        # Formula Preview rujuk column K pada row tersebut
+        image_formula = f"=IMAGE({link_column_letter}{insert_index})"
+
 
         sheet.insert_row([
             id_aduan,
@@ -260,10 +267,11 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.get("kategori"),
             context.user_data.get("lokasi"),
             context.user_data.get("keterangan"),
-            image_formula,        # Preview
-            hyperlink_formula,    # Link
-            "Dalam proses"        # Status
-        ], index=2)
+            image_formula,     # Column J → Preview
+            image_url,         # Column K → Link asal
+            "Dalam proses"     # Column L → Status
+        ], index=insert_index)
+
 
         context.user_data.clear()
 
