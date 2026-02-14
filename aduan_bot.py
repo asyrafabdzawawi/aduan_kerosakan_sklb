@@ -29,6 +29,8 @@ from reportlab.lib.utils import ImageReader
 # ==================================================
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 SHEET_ID = "1j9ZKSju8r-tcRitKKCAY-RGKH4jUeczgsVpecEJwgvI"
+
+# ✅ WAJIB guna appspot.com
 FIREBASE_BUCKET = "relief-31bc6.appspot.com"
 
 
@@ -51,17 +53,27 @@ ADMIN_IDS = [
 firebase_creds = credentials.Certificate(
     json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT_JSON"])
 )
-firebase_admin.initialize_app(firebase_creds, {"storageBucket": FIREBASE_BUCKET})
+
+firebase_admin.initialize_app(firebase_creds, {
+    "storageBucket": FIREBASE_BUCKET
+})
+
 bucket = storage.bucket()
 
 
 # ==================================================
 # GOOGLE SHEET INIT
 # ==================================================
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
 sheet_creds = Credentials.from_service_account_info(
-    json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]), scopes=SCOPES
+    json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]),
+    scopes=SCOPES
 )
+
 gc = gspread.authorize(sheet_creds)
 sheet = gc.open_by_key(SHEET_ID).sheet1
 
@@ -137,16 +149,14 @@ async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==================================================
 async def pilih_bulan_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    user_id = update.effective_user.id
-
-    if user_id not in ADMIN_IDS:
+    if update.effective_user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ Tidak dibenarkan.")
         return
 
     context.user_data["step"] = "pilih_bulan"
 
     await update.message.reply_text(
-        "📅 Masukkan bulan laporan dalam format:\n\nMM/YYYY\n\nContoh: 02/2026"
+        "📅 Masukkan bulan laporan dalam format:\n\nMM/YYYY\nContoh: 02/2026"
     )
 
 
@@ -184,6 +194,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="Markdown"
                 )
                 break
+
         context.user_data.clear()
 
     elif step == "pilih_bulan":
@@ -251,10 +262,10 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
         try:
             image_url = row[10]
-            file_part = image_url.split("/aduan/")[1]
-            filename_image = file_part.split("?")[0]
+            clean_url = image_url.split("?")[0]
+            blob_path = clean_url.split(".com/")[1]
 
-            blob = bucket.blob(f"aduan/{filename_image}")
+            blob = bucket.blob(blob_path)
             image_bytes = blob.download_as_bytes()
 
             img = ImageReader(BytesIO(image_bytes))
@@ -263,7 +274,9 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
         except Exception as e:
             print("ERROR GAMBAR:", e)
-            elements.append(Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"]))
+            elements.append(
+                Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"])
+            )
 
         elements.append(Spacer(1, 30))
 
@@ -291,7 +304,12 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         blob = bucket.blob(f"aduan/{filename}")
         blob.upload_from_filename(filename, content_type="image/jpeg")
 
-        image_url = blob.generate_signed_url(version="v4", expiration=60*60*24*7, method="GET")
+        image_url = blob.generate_signed_url(
+            version="v4",
+            expiration=60*60*24*7,
+            method="GET"
+        )
+
         os.remove(filename)
 
         tz = pytz.timezone("Asia/Kuala_Lumpur")
@@ -347,6 +365,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊 Semak Rekod Aduan$"), pilih_bulan_laporan))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
