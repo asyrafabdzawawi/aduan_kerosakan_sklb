@@ -3,3 +3,4 @@ firebase-admin
 gspread
 google-auth
 pytz
+reportlab
