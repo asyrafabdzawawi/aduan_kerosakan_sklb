@@ -4,6 +4,10 @@ import json
 from io import BytesIO
 from datetime import datetime
 from urllib.parse import urlparse, unquote
+from reportlab.platypus import Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from PIL import Image as PILImage
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -224,7 +228,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# JANA PDF
+# JANA PDF (2 COLUMN VERSION)
 # ==================================================
 async def jana_laporan_pdf(update, bulan_pilih):
 
@@ -254,15 +258,16 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
     for row in data_bulan:
 
-        block = []
-        block.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
-        block.append(Spacer(1, 6))
-        block.append(Paragraph(f"ID Aduan : {row[0]}", styles["Normal"]))
-        block.append(Paragraph(f"Tarikh   : {row[2]}", styles["Normal"]))
-        block.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
-        block.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
-        block.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
-        block.append(Spacer(1, 8))
+        text_content = []
+        text_content.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
+        text_content.append(Spacer(1, 6))
+        text_content.append(Paragraph(f"ID Aduan : {row[0]}", styles["Normal"]))
+        text_content.append(Paragraph(f"Tarikh   : {row[2]}", styles["Normal"]))
+        text_content.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
+        text_content.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
+        text_content.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
+
+        img_element = Paragraph("Tiada gambar", styles["Normal"])
 
         try:
             image_url = row[10]
@@ -271,13 +276,36 @@ async def jana_laporan_pdf(update, bulan_pilih):
             clean_path = clean_path.replace("relief-31bc6.firebasestorage.app/", "")
             blob = bucket.blob(clean_path)
             image_bytes = blob.download_as_bytes()
-            img = Image(BytesIO(image_bytes), width=180, height=120)
-            block.append(img)
-        except:
-            block.append(Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"]))
 
-        block.append(Spacer(1, 15))
-        elements.append(KeepTogether(block))
+            pil_img = PILImage.open(BytesIO(image_bytes))
+            img_width, img_height = pil_img.size
+
+            max_width = 3 * inch
+            max_height = 4 * inch
+
+            ratio = min(max_width / img_width, max_height / img_height)
+            new_width = img_width * ratio
+            new_height = img_height * ratio
+
+            img_element = Image(BytesIO(image_bytes), width=new_width, height=new_height)
+            img_element.hAlign = 'LEFT'
+
+        except:
+            pass
+
+        table_data = [[text_content, img_element]]
+
+        table = Table(table_data, colWidths=[3.8 * inch, 2.2 * inch])
+
+        table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+
+        elements.append(table)
         elements.append(Spacer(1, 20))
 
     doc.build(
@@ -286,112 +314,5 @@ async def jana_laporan_pdf(update, bulan_pilih):
         onLaterPages=add_footer
     )
 
-
     await update.message.reply_document(document=open(filename_pdf, "rb"))
     os.remove(filename_pdf)
-
-def add_footer(canvas_obj, doc):
-    canvas_obj.saveState()
-
-    footer_text_1 = "Sinergi Ke Arah Lonjakan Bestari"
-    footer_text_2 = "#LabuBest"
-
-    width, height = A4
-
-    canvas_obj.setFont("Helvetica", 9)
-
-    # Garisan atas footer
-    canvas_obj.line(40, 60, width - 40, 60)
-
-    # Text footer
-    canvas_obj.drawCentredString(width / 2, 45, footer_text_1)
-    canvas_obj.drawCentredString(width / 2, 35, footer_text_2)
-
-    # Nombor muka surat
-    page_number_text = f"Halaman {doc.page}"
-    canvas_obj.drawRightString(width - 40, 25, page_number_text)
-
-    canvas_obj.restoreState()
-
-
-
-# ==================================================
-# GAMBAR
-# ==================================================
-async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if context.user_data.get("step") != "gambar":
-        return
-
-    user = update.effective_user
-    photo = update.message.photo[-1]
-    file = await photo.get_file()
-
-    filename = f"{user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-    await file.download_to_drive(filename)
-
-    blob = bucket.blob(f"aduan/{filename}")
-    blob.upload_from_filename(filename, content_type="image/jpeg")
-
-    image_url = blob.generate_signed_url(version="v4", expiration=60*60*24*7, method="GET")
-    os.remove(filename)
-
-    tz = pytz.timezone("Asia/Kuala_Lumpur")
-    now = datetime.now(tz)
-
-    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-    tarikh = now.strftime("%d/%m/%Y")
-    masa = now.strftime("%I:%M %p")
-
-    records = sheet.get_all_values()
-    total = len(records)
-    id_aduan = f"A{str(total).zfill(4)}"
-
-    sheet.insert_row(
-        [
-            id_aduan, timestamp, tarikh, masa,
-            user.full_name, user.id,
-            context.user_data.get("kategori"),
-            context.user_data.get("lokasi"),
-            context.user_data.get("keterangan"),
-            '=IMAGE(INDIRECT("K"&ROW()))',
-            image_url,
-            "Dalam proses"
-        ],
-        index=2,
-        value_input_option="USER_ENTERED"
-    )
-
-    context.user_data.clear()
-
-    await update.message.reply_text(
-        f"✅ Aduan berjaya direkod\n\n"
-        f"🆔 ID Aduan : {id_aduan}\n"
-        f"📅 Tarikh   : {tarikh}\n"
-        f"⏰ Masa     : {masa}"
-    )
-
-
-# ==================================================
-# RUN BOT
-# ==================================================
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-
-    app.add_handler(MessageHandler(filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
-    app.add_handler(MessageHandler(filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
-    app.add_handler(MessageHandler(filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod))
-    app.add_handler(MessageHandler(filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
-
-    app.add_handler(CallbackQueryHandler(kategori_callback))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-    app.add_handler(MessageHandler(filters.PHOTO, gambar))
-
-    print("🤖 Bot Aduan Kerosakan sedang berjalan...")
-    app.run_polling()
-
-
-if __name__ == "__main__":
-    main()
