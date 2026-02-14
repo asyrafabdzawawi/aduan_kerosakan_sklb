@@ -407,7 +407,7 @@ def main():
 
     app.add_handler(MessageHandler(filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
     app.add_handler(MessageHandler(filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
-    app.add_handler(MessageHandler(filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod))
+    app.add_handler(MessageHandler(filters.Regex("^📊 Semak Rekod Aduan Terkini$"), semak_rekod))
     app.add_handler(MessageHandler(filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
 
     app.add_handler(CallbackQueryHandler(kategori_callback))
