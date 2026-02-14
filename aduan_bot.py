@@ -83,10 +83,10 @@ async def papar_menu(update, context):
     reply_keyboard = [
         ["🛠️ Buat Aduan Kerosakan"],
         ["📋 Semak Status Aduan"]
+        (["📊 Semak Rekod Aduan Terkini"])    
     ]
 
     if user_id in ADMIN_IDS:
-        reply_keyboard.append(["📊 Semak Rekod Aduan"])
         reply_keyboard.append(["📄 Laporan Bulanan PDF"])
 
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
