@@ -136,9 +136,7 @@ async def kategori_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==================================================
 async def semak_rekod(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    if update.effective_user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Tidak dibenarkan.")
-        return
+    
 
     records = sheet.get_all_values()
 
