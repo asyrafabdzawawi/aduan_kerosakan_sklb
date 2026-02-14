@@ -251,10 +251,10 @@ async def jana_laporan_pdf(update, bulan_pilih):
         blob = bucket.blob(clean_path)
         image_bytes = blob.download_as_bytes()
 
-        # ✅ Guna BytesIO terus (BUKAN ImageReader)
         image_stream = BytesIO(image_bytes)
 
-        image = Image(image_stream, width=300, height=200)
+        # ✅ Gambar lebih kecil & proportion maintain
+        image = Image(image_stream, width=180, height=120)
         elements.append(image)
 
     except Exception as e:
@@ -264,7 +264,11 @@ async def jana_laporan_pdf(update, bulan_pilih):
         )
 
 
+
         elements.append(Spacer(1, 30))
+        elements.append(Paragraph("------------------------------------------------------------", styles["Normal"]))
+        elements.append(Spacer(1, 20))
+
 
     doc.build(elements)
 
