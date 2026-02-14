@@ -87,6 +87,7 @@ async def papar_menu(update, context):
     ]
 
     if user_id in ADMIN_IDS:
+        reply_keyboard.append(["📑 Lihat Rekod Penuh Aduan"])
         reply_keyboard.append(["📄 Laporan Bulanan PDF"])
 
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
@@ -155,6 +156,28 @@ async def semak_rekod(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(text, parse_mode="Markdown")
 
+# ==================================================
+# ADMIN – LIHAT REKOD PENUH GOOGLE SHEET
+# ==================================================
+async def lihat_rekod_penuh(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    user_id = update.effective_user.id
+
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Anda tidak dibenarkan akses menu ini.")
+        return
+
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
+
+    keyboard = [
+        [InlineKeyboardButton("📊 Buka Google Sheet", url=sheet_url)]
+    ]
+
+    await update.message.reply_text(
+        "📑 *Rekod Aduan Penuh*\n\nKlik butang di bawah untuk buka Google Sheet:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
 
 # ==================================================
 # SEMAK STATUS
@@ -409,6 +432,8 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
     app.add_handler(MessageHandler(filters.Regex("^📊 Semak Rekod Aduan Terkini$"), semak_rekod))
     app.add_handler(MessageHandler(filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
+    app.add_handler(MessageHandler(filters.Regex("^📑 Lihat Rekod Penuh Aduan$"), lihat_rekod_penuh))
+
 
     app.add_handler(CallbackQueryHandler(kategori_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
