@@ -15,14 +15,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # PDF IMPORT
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import TableStyle
-from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.graphics.shapes import Drawing
-from reportlab.graphics.charts.barcharts import VerticalBarChart
-from reportlab.lib.utils import ImageReader
 
 
 # ==================================================
@@ -118,36 +113,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# BUAT ADUAN
-# ==================================================
-async def buat_aduan_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    keyboard = [[InlineKeyboardButton(k, callback_data=f"kategori|{k}")] for k in KATEGORI_LIST]
-
-    await update.message.reply_text(
-        "🛠️ Pilih kategori kerosakan:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-
-# ==================================================
 # SEMAK STATUS
 # ==================================================
 async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     context.user_data.clear()
     context.user_data["step"] = "semak_id"
-
-    await update.message.reply_text(
-        "📋 Sila masukkan ID Aduan anda\n\nContoh: A0023"
-    )
+    await update.message.reply_text("📋 Sila masukkan ID Aduan anda\n\nContoh: A0023")
 
 
 # ==================================================
 # PILIH BULAN LAPORAN
 # ==================================================
 async def pilih_bulan_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if update.effective_user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ Tidak dibenarkan.")
         return
@@ -166,17 +143,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     step = context.user_data.get("step")
 
-    if step == "lokasi":
-        context.user_data["lokasi"] = update.message.text
-        context.user_data["step"] = "keterangan"
-        await update.message.reply_text("📝 Sila terangkan masalah / kerosakan:")
-
-    elif step == "keterangan":
-        context.user_data["keterangan"] = update.message.text
-        context.user_data["step"] = "gambar"
-        await update.message.reply_text("📸 Sila hantar 1 gambar kerosakan (wajib).")
-
-    elif step == "semak_id":
+    if step == "semak_id":
         id_cari = update.message.text.strip().upper()
         records = sheet.get_all_values()
 
@@ -203,18 +170,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# JANA PDF (404 FIX + FLOW ASAL KEKAL)
+# JANA PDF (VERSI FINAL STABIL)
 # ==================================================
 async def jana_laporan_pdf(update, bulan_pilih):
 
     records = sheet.get_all_values()
-    data_bulan = []
-
-    for row in records[1:]:
-        if bulan_pilih in row[2]:
-            data_bulan.append(row)
-
-    jumlah = len(data_bulan)
+    data_bulan = [row for row in records[1:] if bulan_pilih in row[2]]
 
     filename_pdf = f"Laporan_{bulan_pilih.replace('/','_')}.pdf"
     doc = SimpleDocTemplate(filename_pdf, pagesize=A4)
@@ -224,126 +185,48 @@ async def jana_laporan_pdf(update, bulan_pilih):
     elements.append(Paragraph("<b>LAPORAN ADUAN KEROSAKAN</b>", styles["Title"]))
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(f"Bulan: {bulan_pilih}", styles["Normal"]))
-    elements.append(Paragraph(f"Jumlah Aduan: {jumlah}", styles["Normal"]))
+    elements.append(Paragraph(f"Jumlah Aduan: {len(data_bulan)}", styles["Normal"]))
     elements.append(Spacer(1, 20))
 
     for row in data_bulan:
 
         elements.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
         elements.append(Spacer(1, 6))
-
         elements.append(Paragraph(f"ID Aduan : {row[0]}", styles["Normal"]))
         elements.append(Paragraph(f"Tarikh   : {row[2]}", styles["Normal"]))
         elements.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
         elements.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
         elements.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
-        elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 8))
 
-    try:
-        image_url = row[10]
+        try:
+            image_url = row[10]
 
-        parsed = urlparse(image_url)
-        clean_path = unquote(parsed.path)
+            parsed = urlparse(image_url)
+            clean_path = unquote(parsed.path).lstrip("/")
+            clean_path = clean_path.replace("relief-31bc6.firebasestorage.app/", "")
 
-        clean_path = clean_path.lstrip("/")
-        clean_path = clean_path.replace("relief-31bc6.firebasestorage.app/", "")
+            blob = bucket.blob(clean_path)
+            image_bytes = blob.download_as_bytes()
 
-        blob = bucket.blob(clean_path)
-        image_bytes = blob.download_as_bytes()
+            image_stream = BytesIO(image_bytes)
+            img = Image(image_stream, width=180, height=120)
+            elements.append(img)
 
-        image_stream = BytesIO(image_bytes)
+        except Exception as e:
+            print("ERROR GAMBAR:", e)
+            elements.append(
+                Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"])
+            )
 
-        # ✅ Gambar lebih kecil & proportion maintain
-        image = Image(image_stream, width=180, height=120)
-        elements.append(image)
-
-    except Exception as e:
-        print("ERROR GAMBAR:", e)
-        elements.append(
-        Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"])
-        )
-
-
-
-        elements.append(Spacer(1, 30))
-        elements.append(Paragraph("------------------------------------------------------------", styles["Normal"]))
+        elements.append(Spacer(1, 15))
+        elements.append(Paragraph("--------------------------------------------------", styles["Normal"]))
         elements.append(Spacer(1, 20))
-
 
     doc.build(elements)
 
     await update.message.reply_document(document=open(filename_pdf, "rb"))
     os.remove(filename_pdf)
-
-
-# ==================================================
-# IMAGE HANDLER (ASAL)
-# ==================================================
-async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        if context.user_data.get("step") != "gambar":
-            return
-
-        user = update.effective_user
-        photo = update.message.photo[-1]
-        file = await photo.get_file()
-
-        filename = f"{user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-        await file.download_to_drive(filename)
-
-        blob = bucket.blob(f"aduan/{filename}")
-        blob.upload_from_filename(filename, content_type="image/jpeg")
-
-        image_url = blob.generate_signed_url(
-            version="v4",
-            expiration=60*60*24*7,
-            method="GET"
-        )
-
-        os.remove(filename)
-
-        tz = pytz.timezone("Asia/Kuala_Lumpur")
-        now = datetime.now(tz)
-
-        timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-        tarikh = now.strftime("%d/%m/%Y")
-        masa = now.strftime("%I:%M %p")
-
-        records = sheet.get_all_values()
-        total = len(records)
-        id_aduan = f"A{str(total).zfill(4)}"
-
-        sheet.insert_row(
-            [
-                id_aduan,
-                timestamp,
-                tarikh,
-                masa,
-                user.full_name,
-                user.id,
-                context.user_data.get("kategori"),
-                context.user_data.get("lokasi"),
-                context.user_data.get("keterangan"),
-                '=IMAGE(INDIRECT("K"&ROW()))',
-                image_url,
-                "Dalam proses"
-            ],
-            index=2,
-            value_input_option="USER_ENTERED"
-        )
-
-        context.user_data.clear()
-
-        await update.message.reply_text(
-            f"✅ Aduan berjaya direkod\n\n"
-            f"🆔 ID Aduan : {id_aduan}\n"
-            f"📅 Tarikh   : {tarikh}\n"
-            f"⏰ Masa     : {masa}"
-        )
-
-    except Exception as e:
-        print("SYSTEM ERROR:", e)
-        await update.message.reply_text("⚠️ Ralat sistem berlaku.")
 
 
 # ==================================================
@@ -353,13 +236,9 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊 Semak Rekod Aduan$"), pilih_bulan_laporan))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
-
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-    app.add_handler(MessageHandler(filters.PHOTO, gambar))
 
     print("🤖 Bot Aduan Kerosakan sedang berjalan...")
     app.run_polling()
