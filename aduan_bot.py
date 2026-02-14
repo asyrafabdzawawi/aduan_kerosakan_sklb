@@ -52,32 +52,26 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 # PAPAR MENU UTAMA (INLINE + TEKS ARAHAN BERASINGAN)
 # ==================================================
 # ==================================================
-# PAPAR MENU UTAMA (INLINE SAHAJA - TIADA BUTTON BAWAH)
+# PAPAR MENU UTAMA (REPLY KEYBOARD SAHAJA)
 # ==================================================
 async def papar_menu(update, context):
 
-    keyboard = [
-        [InlineKeyboardButton("🛠️ Buat Aduan Kerosakan", callback_data="menu|aduan")],
-        [InlineKeyboardButton("📋 Semak Status Aduan", callback_data="menu|status")]
+    reply_keyboard = [
+        ["🛠️ Buat Aduan Kerosakan"],
+        ["📋 Semak Status Aduan"]
     ]
 
-    # Jika dari /start atau text
-    if update.message:
-        await update.message.reply_text(
-            "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
-            "Sila pilih menu di bawah:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
+    reply_markup = ReplyKeyboardMarkup(
+        reply_keyboard,
+        resize_keyboard=True
+    )
 
-    # Jika dari callback (nak kembali ke menu)
-    elif update.callback_query:
-        await update.callback_query.edit_message_text(
-            "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
-            "Sila pilih menu di bawah:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
+    await update.message.reply_text(
+        "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
+        "Sila pilih menu di bawah:",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
 
 
 
@@ -202,6 +196,31 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data.clear()
 
+# ==================================================
+# BUAT ADUAN (VERSI TEXT BUTTON)
+# ==================================================
+async def buat_aduan_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    keyboard = [[InlineKeyboardButton(k, callback_data=f"kategori|{k}")] for k in KATEGORI_LIST]
+
+    await update.message.reply_text(
+        "🛠️ Pilih kategori kerosakan:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# ==================================================
+# SEMAK STATUS (VERSI TEXT BUTTON)
+# ==================================================
+async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    context.user_data.clear()
+    context.user_data["step"] = "semak_id"
+
+    await update.message.reply_text(
+        "📋 Sila masukkan ID Aduan anda\n\nContoh: A0023"
+    )
+
 
 # ==================================================
 # IMAGE HANDLER (WAJIB GAMBAR)
@@ -276,13 +295,23 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    
+
+    # Button di typing keyboard
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
+
+    # Untuk kategori (inline button)
     app.add_handler(CallbackQueryHandler(button))
+
+    # Flow text biasa
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+
+    # Gambar
     app.add_handler(MessageHandler(filters.PHOTO, gambar))
 
     print("🤖 Bot Aduan Kerosakan sedang berjalan...")
     app.run_polling()
+
 
 
 if __name__ == "__main__":
