@@ -239,30 +239,30 @@ async def jana_laporan_pdf(update, bulan_pilih):
         elements.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
         elements.append(Spacer(1, 10))
 
-        try:
-            image_url = row[10]
+    try:
+        image_url = row[10]
 
-            parsed = urlparse(image_url)
-            clean_path = unquote(parsed.path)
+        parsed = urlparse(image_url)
+        clean_path = unquote(parsed.path)
 
-            # buang slash pertama
-            clean_path = clean_path.lstrip("/")
+        clean_path = clean_path.lstrip("/")
+        clean_path = clean_path.replace("relief-31bc6.firebasestorage.app/", "")
 
-            # buang nama bucket public
-            clean_path = clean_path.replace("relief-31bc6.firebasestorage.app/", "")
+        blob = bucket.blob(clean_path)
+        image_bytes = blob.download_as_bytes()
 
-            blob = bucket.blob(clean_path)
-            image_bytes = blob.download_as_bytes()
+        # ✅ Guna BytesIO terus (BUKAN ImageReader)
+        image_stream = BytesIO(image_bytes)
 
-            img = ImageReader(BytesIO(image_bytes))
-            image = Image(img, width=300, height=200)
-            elements.append(image)
+        image = Image(image_stream, width=300, height=200)
+        elements.append(image)
 
-        except Exception as e:
-            print("ERROR GAMBAR:", e)
-            elements.append(
-                Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"])
-            )
+    except Exception as e:
+        print("ERROR GAMBAR:", e)
+        elements.append(
+        Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"])
+        )
+
 
         elements.append(Spacer(1, 30))
 
