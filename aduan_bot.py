@@ -73,14 +73,10 @@ async def papar_menu(update, context):
         ["📋 Semak Status Aduan"]
     ]
 
-    # Admin sahaja nampak menu ini
     if user_id in ADMIN_IDS:
         reply_keyboard.append(["📊 Semak Rekod Aduan"])
 
-    reply_markup = ReplyKeyboardMarkup(
-        reply_keyboard,
-        resize_keyboard=True
-    )
+    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
     await update.message.reply_text(
         "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
@@ -91,7 +87,7 @@ async def papar_menu(update, context):
 
 
 # ==================================================
-# /start
+# START
 # ==================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
@@ -99,7 +95,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# BUAT ADUAN (TEXT BUTTON)
+# BUAT ADUAN
 # ==================================================
 async def buat_aduan_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -112,7 +108,7 @@ async def buat_aduan_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# SEMAK STATUS (TEXT BUTTON)
+# SEMAK STATUS
 # ==================================================
 async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -125,7 +121,7 @@ async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# SEMAK REKOD (ADMIN SAHAJA)
+# ADMIN – SEMAK REKOD
 # ==================================================
 async def semak_rekod_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -142,7 +138,7 @@ async def semak_rekod_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "📊 *Rekod Aduan Kerosakan*\n\nKlik butang di bawah untuk buka Google Sheet:",
+        "📊 *Rekod Aduan Kerosakan*\n\nKlik butang di bawah:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -155,19 +151,19 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    key, *rest = query.data.split("|")
-    value = rest[0] if rest else None
+    key, value = query.data.split("|")
 
     if key == "kategori":
         context.user_data["kategori"] = value
+        context.user_data["step"] = "lokasi"
+
         await query.edit_message_text(
             "📍 Sila taip lokasi kerosakan (contoh: Kelas 5 Amber, Makmal Komputer):"
         )
-        context.user_data["step"] = "lokasi"
 
 
 # ==================================================
-# TEXT HANDLER
+# TEXT FLOW
 # ==================================================
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("step")
@@ -175,13 +171,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if step == "lokasi":
         context.user_data["lokasi"] = update.message.text
         context.user_data["step"] = "keterangan"
-
         await update.message.reply_text("📝 Sila terangkan masalah / kerosakan:")
 
     elif step == "keterangan":
         context.user_data["keterangan"] = update.message.text
         context.user_data["step"] = "gambar"
-
         await update.message.reply_text(
             "📸 Sila hantar **1 gambar** kerosakan (wajib).",
             parse_mode="Markdown"
@@ -189,14 +183,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif step == "semak_id":
         id_cari = update.message.text.strip().upper()
-
         records = sheet.get_all_values()
         jumpa = False
 
         for row in records[1:]:
             if row[0] == id_cari:
                 jumpa = True
-
                 await update.message.reply_text(
                     f"📋 *Status Aduan*\n\n"
                     f"🆔 ID Aduan : {row[0]}\n"
@@ -204,14 +196,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"⏰ Masa    : {row[3]}\n"
                     f"🛠️ Kategori: {row[6]}\n"
                     f"📍 Lokasi : {row[7]}\n"
-                    f"📌 Status : *{row[10]}*",
+                    f"📌 Status : *{row[11]}*",
                     parse_mode="Markdown"
                 )
                 break
 
         if not jumpa:
             await update.message.reply_text(
-                "❌ ID Aduan tidak dijumpai.\n\nPastikan ID betul, contoh: A0023"
+                "❌ ID Aduan tidak dijumpai.\nPastikan ID betul."
             )
 
         context.user_data.clear()
@@ -235,7 +227,12 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         blob = bucket.blob(f"aduan/{filename}")
         blob.upload_from_filename(filename, content_type="image/jpeg")
 
-        image_url = blob.generate_signed_url(version="v4", expiration=60*60*24*7, method="GET")
+        image_url = blob.generate_signed_url(
+            version="v4",
+            expiration=60*60*24*7,
+            method="GET"
+        )
+
         os.remove(filename)
 
         tz = pytz.timezone("Asia/Kuala_Lumpur")
@@ -245,11 +242,15 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tarikh = now.strftime("%d/%m/%Y")
         masa = now.strftime("%I:%M %p")
 
-        total = len(sheet.get_all_values())
+        records = sheet.get_all_values()
+        total = len(records)
+
         id_aduan = f"A{str(total).zfill(4)}"
 
-        last_row = total + 1
-        sheet.update(f"A{last_row}:K{last_row}", [[
+        image_formula = f'=IMAGE("{image_url}")'
+        hyperlink_formula = f'=HYPERLINK("{image_url}","Klik Gambar")'
+
+        sheet.insert_row([
             id_aduan,
             timestamp,
             tarikh,
@@ -259,9 +260,10 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.get("kategori"),
             context.user_data.get("lokasi"),
             context.user_data.get("keterangan"),
-            image_url,
-            "Dalam proses"
-        ]])
+            image_formula,        # Preview
+            hyperlink_formula,    # Link
+            "Dalam proses"        # Status
+        ], index=2)
 
         context.user_data.clear()
 
@@ -269,15 +271,12 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ Aduan berjaya direkod\n\n"
             f"🆔 ID Aduan : {id_aduan}\n"
             f"📅 Tarikh   : {tarikh}\n"
-            f"⏰ Masa     : {masa}\n\n"
-            f"Terima kasih atas makluman anda 🙏"
+            f"⏰ Masa     : {masa}"
         )
 
     except Exception as e:
         print("SYSTEM ERROR:", e)
-        await update.message.reply_text(
-            "⚠️ Aduan diterima tetapi berlaku ralat sistem.\nSila maklumkan pentadbir."
-        )
+        await update.message.reply_text("⚠️ Ralat sistem berlaku.")
 
 
 # ==================================================
@@ -287,7 +286,6 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod_admin))
