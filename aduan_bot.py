@@ -3,6 +3,7 @@ import os
 import json
 from io import BytesIO
 from datetime import datetime
+from urllib.parse import urlparse, unquote
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
@@ -29,8 +30,6 @@ from reportlab.lib.utils import ImageReader
 # ==================================================
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 SHEET_ID = "1j9ZKSju8r-tcRitKKCAY-RGKH4jUeczgsVpecEJwgvI"
-
-# ✅ WAJIB guna appspot.com
 FIREBASE_BUCKET = "relief-31bc6.appspot.com"
 
 
@@ -204,7 +203,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# JANA PDF (STABIL FIREBASE)
+# JANA PDF (404 FIX + FLOW ASAL KEKAL)
 # ==================================================
 async def jana_laporan_pdf(update, bulan_pilih):
 
@@ -217,11 +216,6 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
     jumlah = len(data_bulan)
 
-    kategori_count = {}
-    for row in data_bulan:
-        kategori = row[6]
-        kategori_count[kategori] = kategori_count.get(kategori, 0) + 1
-
     filename_pdf = f"Laporan_{bulan_pilih.replace('/','_')}.pdf"
     doc = SimpleDocTemplate(filename_pdf, pagesize=A4)
     elements = []
@@ -233,19 +227,6 @@ async def jana_laporan_pdf(update, bulan_pilih):
     elements.append(Paragraph(f"Jumlah Aduan: {jumlah}", styles["Normal"]))
     elements.append(Spacer(1, 20))
 
-    if kategori_count:
-        drawing = Drawing(400, 200)
-        chart = VerticalBarChart()
-        chart.x = 50
-        chart.y = 50
-        chart.height = 125
-        chart.width = 300
-        chart.data = [list(kategori_count.values())]
-        chart.categoryAxis.categoryNames = list(kategori_count.keys())
-        drawing.add(chart)
-        elements.append(drawing)
-        elements.append(Spacer(1, 30))
-
     for row in data_bulan:
 
         elements.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
@@ -253,19 +234,24 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
         elements.append(Paragraph(f"ID Aduan : {row[0]}", styles["Normal"]))
         elements.append(Paragraph(f"Tarikh   : {row[2]}", styles["Normal"]))
-        elements.append(Paragraph(f"Masa     : {row[3]}", styles["Normal"]))
         elements.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
         elements.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
         elements.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
-        elements.append(Paragraph(f"Status   : {row[11]}", styles["Normal"]))
         elements.append(Spacer(1, 10))
 
         try:
             image_url = row[10]
-            clean_url = image_url.split("?")[0]
-            blob_path = clean_url.split(".com/")[1]
 
-            blob = bucket.blob(blob_path)
+            parsed = urlparse(image_url)
+            clean_path = unquote(parsed.path)
+
+            # buang slash pertama
+            clean_path = clean_path.lstrip("/")
+
+            # buang nama bucket public
+            clean_path = clean_path.replace("relief-31bc6.firebasestorage.app/", "")
+
+            blob = bucket.blob(clean_path)
             image_bytes = blob.download_as_bytes()
 
             img = ImageReader(BytesIO(image_bytes))
