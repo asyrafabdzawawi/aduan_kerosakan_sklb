@@ -285,6 +285,7 @@ async def jana_laporan_pdf(update, bulan_pilih):
         text_content.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
         text_content.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
         text_content.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
+        text_content.append(Paragraph(f"Status : {row[9]}", styles["Normal"]))
 
         img_element = Paragraph("Tiada gambar", styles["Normal"])
 
