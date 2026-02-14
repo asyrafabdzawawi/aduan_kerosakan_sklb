@@ -193,7 +193,7 @@ async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def pilih_bulan_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Tidak dibenarkan.")
+        await update.message.reply_text("❌ Tidak dibenarkan untuk akses. Hanya pentadbir saja dapat akses. Jika perlukan fail laporan sila berhubung terus dengan pentadbir.")
         return
 
     context.user_data["step"] = "pilih_bulan"
