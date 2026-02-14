@@ -12,6 +12,15 @@ from firebase_admin import credentials, storage
 import gspread
 from google.oauth2.service_account import Credentials
 
+# PDF IMPORT
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import TableStyle
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+
 
 # ==================================================
 # CONFIG
@@ -75,6 +84,7 @@ async def papar_menu(update, context):
 
     if user_id in ADMIN_IDS:
         reply_keyboard.append(["📊 Semak Rekod Aduan"])
+        reply_keyboard.append(["📄 Laporan Bulanan PDF"])
 
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
@@ -145,21 +155,21 @@ async def semak_rekod_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# CALLBACK FLOW
+# PILIH BULAN UNTUK LAPORAN
 # ==================================================
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+async def pilih_bulan_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    key, value = query.data.split("|")
+    user_id = update.effective_user.id
 
-    if key == "kategori":
-        context.user_data["kategori"] = value
-        context.user_data["step"] = "lokasi"
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Tidak dibenarkan.")
+        return
 
-        await query.edit_message_text(
-            "📍 Sila taip lokasi kerosakan (contoh: Kelas 5 Amber, Makmal Komputer):"
-        )
+    context.user_data["step"] = "pilih_bulan"
+
+    await update.message.reply_text(
+        "📅 Masukkan bulan laporan dalam format:\n\nMM/YYYY\n\nContoh: 02/2026"
+    )
 
 
 # ==================================================
@@ -176,19 +186,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif step == "keterangan":
         context.user_data["keterangan"] = update.message.text
         context.user_data["step"] = "gambar"
-        await update.message.reply_text(
-            "📸 Sila hantar **1 gambar** kerosakan (wajib).",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("📸 Sila hantar **1 gambar** kerosakan (wajib).", parse_mode="Markdown")
 
     elif step == "semak_id":
         id_cari = update.message.text.strip().upper()
         records = sheet.get_all_values()
-        jumpa = False
 
         for row in records[1:]:
             if row[0] == id_cari:
-                jumpa = True
                 await update.message.reply_text(
                     f"📋 *Status Aduan*\n\n"
                     f"🆔 ID Aduan : {row[0]}\n"
@@ -200,17 +205,78 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="Markdown"
                 )
                 break
+        context.user_data.clear()
 
-        if not jumpa:
-            await update.message.reply_text(
-                "❌ ID Aduan tidak dijumpai.\nPastikan ID betul."
-            )
-
+    elif step == "pilih_bulan":
+        bulan_pilih = update.message.text.strip()
+        await jana_laporan_pdf(update, bulan_pilih)
         context.user_data.clear()
 
 
 # ==================================================
-# IMAGE HANDLER
+# JANA PDF LAPORAN
+# ==================================================
+async def jana_laporan_pdf(update, bulan_pilih):
+
+    records = sheet.get_all_values()
+    data_bulan = []
+
+    for row in records[1:]:
+        if bulan_pilih in row[2]:
+            data_bulan.append(row)
+
+    jumlah = len(data_bulan)
+
+    kategori_count = {}
+    for row in data_bulan:
+        kategori = row[6]
+        kategori_count[kategori] = kategori_count.get(kategori, 0) + 1
+
+    filename = f"Laporan_{bulan_pilih.replace('/','_')}.pdf"
+    doc = SimpleDocTemplate(filename, pagesize=A4)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    elements.append(Paragraph("<b>LAPORAN ADUAN KEROSAKAN</b>", styles["Title"]))
+    elements.append(Spacer(1, 12))
+    elements.append(Paragraph(f"Bulan: {bulan_pilih}", styles["Normal"]))
+    elements.append(Paragraph(f"Jumlah Aduan: {jumlah}", styles["Normal"]))
+    elements.append(Spacer(1, 20))
+
+    # Carta
+    drawing = Drawing(400, 200)
+    chart = VerticalBarChart()
+    chart.x = 50
+    chart.y = 50
+    chart.height = 125
+    chart.width = 300
+    chart.data = [list(kategori_count.values())]
+    chart.categoryAxis.categoryNames = list(kategori_count.keys())
+    drawing.add(chart)
+    elements.append(drawing)
+    elements.append(Spacer(1, 20))
+
+    # Senarai Aduan
+    table_data = [["ID", "Tarikh", "Kategori", "Lokasi", "Status"]]
+    for row in data_bulan:
+        table_data.append([row[0], row[2], row[6], row[7], row[11]])
+
+    table = Table(table_data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("GRID", (0,0), (-1,-1), 1, colors.grey),
+        ("FONTSIZE", (0,0), (-1,-1), 8)
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
+
+    await update.message.reply_document(document=open(filename, "rb"))
+    os.remove(filename)
+
+
+# ==================================================
+# IMAGE HANDLER (KEKAL ASAL)
 # ==================================================
 async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -227,12 +293,7 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         blob = bucket.blob(f"aduan/{filename}")
         blob.upload_from_filename(filename, content_type="image/jpeg")
 
-        image_url = blob.generate_signed_url(
-            version="v4",
-            expiration=60*60*24*7,
-            method="GET"
-        )
-
+        image_url = blob.generate_signed_url(version="v4", expiration=60*60*24*7, method="GET")
         os.remove(filename)
 
         tz = pytz.timezone("Asia/Kuala_Lumpur")
@@ -244,13 +305,7 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         records = sheet.get_all_values()
         total = len(records)
-
         id_aduan = f"A{str(total).zfill(4)}"
-
-        insert_index = 2
-
-        # Formula dinamik ikut row semasa
-        image_formula = '=IMAGE(INDIRECT("K"&ROW()))'
 
         sheet.insert_row(
             [
@@ -267,10 +322,9 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 image_url,
                 "Dalam proses"
             ],
-            index=insert_index,
+            index=2,
             value_input_option="USER_ENTERED"
         )
-
 
         context.user_data.clear()
 
@@ -296,8 +350,8 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod_admin))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
 
-    app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.add_handler(MessageHandler(filters.PHOTO, gambar))
 
