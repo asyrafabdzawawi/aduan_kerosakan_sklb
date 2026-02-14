@@ -250,7 +250,7 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         insert_index = 2
 
         # Formula dinamik ikut row semasa
-        image_formula = '=IMAGE(INDIRECT("K"&ROW()))'
+        image_formula = "=IMAGE(INDIRECT("K"&ROW()))"
 
         sheet.insert_row([
             id_aduan,
