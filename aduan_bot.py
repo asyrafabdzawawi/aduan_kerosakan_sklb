@@ -116,6 +116,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await papar_menu(update, context)
 
+# ==================================================
+# BUAT ADUAN
+# ==================================================
+async def buat_aduan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    context.user_data["step"] = "nama"
+
+    await update.message.reply_text(
+        "🛠️ *Buat Aduan Kerosakan*\n\n"
+        "Sila masukkan nama anda:",
+        parse_mode="Markdown"
+    )
+
+# ==================================================
+# SEMAK REKOD ADUAN (ADMIN)
+# ==================================================
+async def semak_rekod(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Tidak dibenarkan.")
+        return
+
+    records = sheet.get_all_values()
+
+    jumlah = len(records) - 1
+
+    await update.message.reply_text(
+        f"📊 *Rekod Aduan Keseluruhan*\n\n"
+        f"Jumlah Aduan: {jumlah}",
+        parse_mode="Markdown"
+    )
 
 # ==================================================
 # SEMAK STATUS
@@ -276,9 +307,12 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+
 
     print("🤖 Bot Aduan Kerosakan sedang berjalan...")
     app.run_polling()
