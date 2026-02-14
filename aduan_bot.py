@@ -82,7 +82,7 @@ async def papar_menu(update, context):
 
     reply_keyboard = [
         ["🛠️ Buat Aduan Kerosakan"],
-        ["📋 Semak Status Aduan"]
+        ["📋 Semak Status Aduan"],
         (["📊 Semak Rekod Aduan Terkini"])    
     ]
 
