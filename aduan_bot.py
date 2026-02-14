@@ -226,7 +226,12 @@ async def jana_laporan_pdf(update, bulan_pilih):
         elements.append(Paragraph("--------------------------------------------------", styles["Normal"]))
         elements.append(Spacer(1, 20))
 
-    doc.build(elements)
+    doc.build(
+        elements,
+        onFirstPage=add_footer,
+        onLaterPages=add_footer
+    )
+
 
     await update.message.reply_document(document=open(filename_pdf, "rb"))
     os.remove(filename_pdf)
