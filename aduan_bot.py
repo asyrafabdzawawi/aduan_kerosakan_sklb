@@ -316,3 +316,84 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
     await update.message.reply_document(document=open(filename_pdf, "rb"))
     os.remove(filename_pdf)
+
+# ==================================================
+# GAMBAR
+# ==================================================
+async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if context.user_data.get("step") != "gambar":
+        return
+
+    user = update.effective_user
+    photo = update.message.photo[-1]
+    file = await photo.get_file()
+
+    filename = f"{user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+    await file.download_to_drive(filename)
+
+    blob = bucket.blob(f"aduan/{filename}")
+    blob.upload_from_filename(filename, content_type="image/jpeg")
+
+    image_url = blob.generate_signed_url(version="v4", expiration=60*60*24*7, method="GET")
+    os.remove(filename)
+
+    tz = pytz.timezone("Asia/Kuala_Lumpur")
+    now = datetime.now(tz)
+
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+    tarikh = now.strftime("%d/%m/%Y")
+    masa = now.strftime("%I:%M %p")
+
+    records = sheet.get_all_values()
+    total = len(records)
+    id_aduan = f"A{str(total).zfill(4)}"
+
+    sheet.insert_row(
+        [
+            id_aduan, timestamp, tarikh, masa,
+            user.full_name, user.id,
+            context.user_data.get("kategori"),
+            context.user_data.get("lokasi"),
+            context.user_data.get("keterangan"),
+            '=IMAGE(INDIRECT("K"&ROW()))',
+            image_url,
+            "Dalam proses"
+        ],
+        index=2,
+        value_input_option="USER_ENTERED"
+    )
+
+    context.user_data.clear()
+
+    await update.message.reply_text(
+        f"✅ Aduan berjaya direkod\n\n"
+        f"🆔 ID Aduan : {id_aduan}\n"
+        f"📅 Tarikh   : {tarikh}\n"
+        f"⏰ Masa     : {masa}"
+    )
+
+# ==================================================
+# RUN BOT
+# ==================================================
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+
+    app.add_handler(MessageHandler(filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
+    app.add_handler(MessageHandler(filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
+    app.add_handler(MessageHandler(filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod))
+    app.add_handler(MessageHandler(filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
+
+    app.add_handler(CallbackQueryHandler(kategori_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    app.add_handler(MessageHandler(filters.PHOTO, gambar))
+
+    print("🤖 Bot Aduan Kerosakan sedang berjalan...", flush=True)
+    app.run_polling()
+
+
+
+if __name__ == "__main__":
+    main()
