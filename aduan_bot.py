@@ -374,6 +374,32 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # ==================================================
+# FOOTER PDF
+# ==================================================
+def add_footer(canvas_obj, doc):
+    canvas_obj.saveState()
+
+    footer_text_1 = "Sinergi Ke Arah Lonjakan Bestari"
+    footer_text_2 = "#LabuBest"
+
+    width, height = A4
+
+    canvas_obj.setFont("Helvetica", 9)
+
+    # Garisan atas footer
+    canvas_obj.line(40, 60, width - 40, 60)
+
+    # Text footer
+    canvas_obj.drawCentredString(width / 2, 45, footer_text_1)
+    canvas_obj.drawCentredString(width / 2, 35, footer_text_2)
+
+    # Nombor muka surat
+    page_number_text = f"Halaman {doc.page}"
+    canvas_obj.drawRightString(width - 40, 25, page_number_text)
+
+    canvas_obj.restoreState()
+
+# ==================================================
 # RUN BOT
 # ==================================================
 def main():
