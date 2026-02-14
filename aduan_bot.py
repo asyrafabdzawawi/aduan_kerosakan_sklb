@@ -181,6 +181,21 @@ async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📋 Sila masukkan ID Aduan anda\n\nContoh: A0023"
     )
 
+# ==================================================
+# PILIH BULAN LAPORAN
+# ==================================================
+async def pilih_bulan_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Tidak dibenarkan.")
+        return
+
+    context.user_data["step"] = "pilih_bulan"
+
+    await update.message.reply_text(
+        "📅 Masukkan bulan laporan dalam format:\n\nMM/YYYY\nContoh: 02/2026"
+    )
+
 
 # ==================================================
 # TEXT FLOW
@@ -202,6 +217,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif step == "semak_id":
         id_cari = update.message.text.strip().upper()
         records = sheet.get_all_values()
+
+    elif step == "pilih_bulan":
+        bulan_pilih = update.message.text.strip()
+        await jana_laporan_pdf(update, bulan_pilih)
+        context.user_data.clear()
+
 
         for row in records[1:]:
             if row[0] == id_cari:
@@ -292,6 +313,8 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
     app.add_handler(MessageHandler(filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
     app.add_handler(MessageHandler(filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod))
+    app.add_handler(MessageHandler(filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
+
 
     app.add_handler(CallbackQueryHandler(kategori_callback))
 
