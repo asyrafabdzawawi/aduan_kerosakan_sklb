@@ -247,15 +247,10 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         id_aduan = f"A{str(total).zfill(4)}"
 
-        # Tentukan row yang akan dimasukkan (sentiasa index=2)
         insert_index = 2
 
-        # Column K = Link Gambar
-        link_column_letter = "K"
-
-        # Formula Preview rujuk column K pada row tersebut
-        image_formula = f"=IMAGE({link_column_letter}{insert_index})"
-
+        # Formula preview ikut row sebenar
+        image_formula = f"=IMAGE(K{insert_index})"
 
         sheet.insert_row([
             id_aduan,
@@ -271,7 +266,6 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             image_url,         # Column K → Link asal
             "Dalam proses"     # Column L → Status
         ], index=insert_index)
-
 
         context.user_data.clear()
 
