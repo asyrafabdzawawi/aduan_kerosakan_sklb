@@ -3,7 +3,7 @@ import os
 import json
 from datetime import datetime
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, filters
 
 import firebase_admin
@@ -19,6 +19,19 @@ from google.oauth2.service_account import Credentials
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 SHEET_ID = "1j9ZKSju8r-tcRitKKCAY-RGKH4jUeczgsVpecEJwgvI"
 FIREBASE_BUCKET = "relief-31bc6.firebasestorage.app"
+
+
+# ==================================================
+# ADMIN LIST
+# ==================================================
+ADMIN_IDS = [
+    522707506,
+    3998287,
+    5114021646,
+    14518619,
+    53256464,
+    8214543588
+]
 
 
 # ==================================================
@@ -49,17 +62,20 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 
 
 # ==================================================
-# PAPAR MENU UTAMA (INLINE + TEKS ARAHAN BERASINGAN)
-# ==================================================
-# ==================================================
-# PAPAR MENU UTAMA (REPLY KEYBOARD SAHAJA)
+# PAPAR MENU UTAMA
 # ==================================================
 async def papar_menu(update, context):
+
+    user_id = update.effective_user.id
 
     reply_keyboard = [
         ["🛠️ Buat Aduan Kerosakan"],
         ["📋 Semak Status Aduan"]
     ]
+
+    # Admin sahaja nampak menu ini
+    if user_id in ADMIN_IDS:
+        reply_keyboard.append(["📊 Semak Rekod Aduan"])
 
     reply_markup = ReplyKeyboardMarkup(
         reply_keyboard,
@@ -74,10 +90,6 @@ async def papar_menu(update, context):
     )
 
 
-
-
-
-
 # ==================================================
 # /start
 # ==================================================
@@ -87,34 +99,52 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# MENU UTAMA (BUTANG BAWAH TYPING)
+# BUAT ADUAN (TEXT BUTTON)
 # ==================================================
-async def menu_utama(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    await papar_menu(update, context)
+async def buat_aduan_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-
-# ==================================================
-# MULAKAN ADUAN
-# ==================================================
-async def buat_aduan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton(k, callback_data=f"kategori|{k}")] for k in KATEGORI_LIST]
 
-    await update.callback_query.edit_message_text(
+    await update.message.reply_text(
         "🛠️ Pilih kategori kerosakan:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
 # ==================================================
-# MULA SEMAK STATUS
+# SEMAK STATUS (TEXT BUTTON)
 # ==================================================
-async def semak_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     context.user_data.clear()
     context.user_data["step"] = "semak_id"
 
-    await update.callback_query.edit_message_text(
+    await update.message.reply_text(
         "📋 Sila masukkan ID Aduan anda\n\nContoh: A0023"
+    )
+
+
+# ==================================================
+# SEMAK REKOD (ADMIN SAHAJA)
+# ==================================================
+async def semak_rekod_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    user_id = update.effective_user.id
+
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Anda tidak dibenarkan akses menu ini.")
+        return
+
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
+
+    keyboard = [
+        [InlineKeyboardButton("📊 Buka Google Sheet", url=sheet_url)]
+    ]
+
+    await update.message.reply_text(
+        "📊 *Rekod Aduan Kerosakan*\n\nKlik butang di bawah untuk buka Google Sheet:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
     )
 
 
@@ -128,15 +158,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key, *rest = query.data.split("|")
     value = rest[0] if rest else None
 
-    # ---- MENU UTAMA INLINE ----
-    if key == "menu":
-        if value == "aduan":
-            await buat_aduan(update, context)
-        elif value == "status":
-            await semak_status(update, context)
-
-    # ---- FLOW ADUAN ASAL ----
-    elif key == "kategori":
+    if key == "kategori":
         context.user_data["kategori"] = value
         await query.edit_message_text(
             "📍 Sila taip lokasi kerosakan (contoh: Kelas 5 Amber, Makmal Komputer):"
@@ -145,12 +167,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# TEXT HANDLER (LOKASI, KETERANGAN & SEMAK STATUS)
+# TEXT HANDLER
 # ==================================================
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("step")
 
-    # ---------- FLOW ADUAN (ASAL - TAK DIUBAH) ----------
     if step == "lokasi":
         context.user_data["lokasi"] = update.message.text
         context.user_data["step"] = "keterangan"
@@ -166,7 +187,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-    # ---------- FLOW SEMAK STATUS ----------
     elif step == "semak_id":
         id_cari = update.message.text.strip().upper()
 
@@ -196,34 +216,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data.clear()
 
-# ==================================================
-# BUAT ADUAN (VERSI TEXT BUTTON)
-# ==================================================
-async def buat_aduan_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    keyboard = [[InlineKeyboardButton(k, callback_data=f"kategori|{k}")] for k in KATEGORI_LIST]
-
-    await update.message.reply_text(
-        "🛠️ Pilih kategori kerosakan:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
 
 # ==================================================
-# SEMAK STATUS (VERSI TEXT BUTTON)
-# ==================================================
-async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    context.user_data.clear()
-    context.user_data["step"] = "semak_id"
-
-    await update.message.reply_text(
-        "📋 Sila masukkan ID Aduan anda\n\nContoh: A0023"
-    )
-
-
-# ==================================================
-# IMAGE HANDLER (WAJIB GAMBAR)
+# IMAGE HANDLER
 # ==================================================
 async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -243,7 +238,6 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         image_url = blob.generate_signed_url(version="v4", expiration=60*60*24*7, method="GET")
         os.remove(filename)
 
-        # TIMESTAMP (MALAYSIA)
         tz = pytz.timezone("Asia/Kuala_Lumpur")
         now = datetime.now(tz)
 
@@ -251,11 +245,9 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tarikh = now.strftime("%d/%m/%Y")
         masa = now.strftime("%I:%M %p")
 
-        # AUTO ID ADUAN
         total = len(sheet.get_all_values())
         id_aduan = f"A{str(total).zfill(4)}"
 
-        # SIMPAN KE GOOGLE SHEET
         last_row = total + 1
         sheet.update(f"A{last_row}:K{last_row}", [[
             id_aduan,
@@ -296,22 +288,16 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
 
-    # Button di typing keyboard
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod_admin))
 
-    # Untuk kategori (inline button)
     app.add_handler(CallbackQueryHandler(button))
-
-    # Flow text biasa
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-
-    # Gambar
     app.add_handler(MessageHandler(filters.PHOTO, gambar))
 
     print("🤖 Bot Aduan Kerosakan sedang berjalan...")
     app.run_polling()
-
 
 
 if __name__ == "__main__":
