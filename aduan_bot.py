@@ -78,17 +78,14 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 # MENU
 # ==================================================
 async def papar_menu(update, context):
-    user_id = update.effective_user.id
 
     reply_keyboard = [
         ["🛠️ Buat Aduan Kerosakan"],
         ["📋 Semak Status Aduan"],
-        (["📊 Semak Rekod Aduan Terkini"])    
+        ["📊 Semak Rekod Aduan Terkini"],
+        ["📑 Lihat Rekod Penuh Aduan"],   # semua user nampak
+        ["📄 Laporan Bulanan PDF"]       # semua user nampak
     ]
-
-    if user_id in ADMIN_IDS:
-        reply_keyboard.append(["📑 Lihat Rekod Penuh Aduan"])
-        reply_keyboard.append(["📄 Laporan Bulanan PDF"])
 
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
@@ -98,6 +95,7 @@ async def papar_menu(update, context):
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
+
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -164,7 +162,7 @@ async def lihat_rekod_penuh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Anda tidak dibenarkan akses menu ini.")
+        await update.message.reply_text("❌ Mohon Maaf. Anda tidak dibenarkan akses menu ini. Hanya pentadbir saja dapat akses")
         return
 
     sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
