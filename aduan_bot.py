@@ -249,8 +249,8 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         insert_index = 2
 
-        # Formula preview ikut row sebenar
-        image_formula = f"=IMAGE(K{insert_index})"
+        # Formula preview (Google Sheet akan auto adjust ke K3, K4, ...)
+        image_formula = "=IMAGE(K2)"
 
         sheet.insert_row([
             id_aduan,
@@ -263,7 +263,7 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.get("lokasi"),
             context.user_data.get("keterangan"),
             image_formula,     # Column J → Preview
-            image_url,         # Column K → Link asal
+            image_url,         # Column K → Link
             "Dalam proses"     # Column L → Status
         ], index=insert_index)
 
