@@ -4,14 +4,9 @@ import json
 from io import BytesIO
 from datetime import datetime
 from urllib.parse import urlparse, unquote
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import inch
-from reportlab.platypus import KeepTogether
-
-
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 import firebase_admin
 from firebase_admin import credentials, storage
@@ -19,8 +14,8 @@ from firebase_admin import credentials, storage
 import gspread
 from google.oauth2.service_account import Credentials
 
-# PDF IMPORT
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+# PDF
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 
@@ -34,7 +29,7 @@ FIREBASE_BUCKET = "relief-31bc6.firebasestorage.app"
 
 
 # ==================================================
-# ADMIN LIST
+# ADMIN
 # ==================================================
 ADMIN_IDS = [
     522707506,
@@ -47,7 +42,7 @@ ADMIN_IDS = [
 
 
 # ==================================================
-# FIREBASE INIT
+# FIREBASE
 # ==================================================
 firebase_creds = credentials.Certificate(
     json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT_JSON"])
@@ -61,7 +56,7 @@ bucket = storage.bucket()
 
 
 # ==================================================
-# GOOGLE SHEET INIT
+# GOOGLE SHEET
 # ==================================================
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -84,10 +79,9 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 
 
 # ==================================================
-# PAPAR MENU
+# MENU
 # ==================================================
 async def papar_menu(update, context):
-
     user_id = update.effective_user.id
 
     reply_keyboard = [
@@ -109,28 +103,48 @@ async def papar_menu(update, context):
     )
 
 
-# ==================================================
-# START
-# ==================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await papar_menu(update, context)
 
+
 # ==================================================
-# BUAT ADUAN
+# BUAT ADUAN (ASAL)
 # ==================================================
-async def buat_aduan(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    context.user_data["step"] = "nama"
+async def buat_aduan_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    keyboard = [[InlineKeyboardButton(k, callback_data=f"kategori|{k}")]
+                for k in KATEGORI_LIST]
 
     await update.message.reply_text(
-        "🛠️ *Buat Aduan Kerosakan*\n\n"
-        "Sila masukkan nama anda:",
-        parse_mode="Markdown"
+        "🛠️ Pilih kategori kerosakan:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+
 # ==================================================
-# SEMAK REKOD ADUAN (ADMIN)
+# CALLBACK KATEGORI
+# ==================================================
+async def kategori_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data.startswith("kategori|"):
+        kategori = data.split("|")[1]
+        context.user_data["kategori"] = kategori
+        context.user_data["step"] = "lokasi"
+
+        await query.message.reply_text(
+            f"📍 Kategori dipilih: {kategori}\n\n"
+            "Sila masukkan lokasi kerosakan:"
+        )
+
+
+# ==================================================
+# SEMAK REKOD (ADMIN)
 # ==================================================
 async def semak_rekod(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -140,13 +154,21 @@ async def semak_rekod(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     records = sheet.get_all_values()
 
-    jumlah = len(records) - 1
+    if len(records) <= 1:
+        await update.message.reply_text("Tiada rekod aduan.")
+        return
 
-    await update.message.reply_text(
-        f"📊 *Rekod Aduan Keseluruhan*\n\n"
-        f"Jumlah Aduan: {jumlah}",
-        parse_mode="Markdown"
-    )
+    text = "📊 *Rekod Aduan Terkini*\n\n"
+
+    for row in records[1:6]:
+        text += (
+            f"🆔 {row[0]}\n"
+            f"📅 {row[2]} | 🛠️ {row[6]}\n"
+            f"📌 {row[11]}\n\n"
+        )
+
+    await update.message.reply_text(text, parse_mode="Markdown")
+
 
 # ==================================================
 # SEMAK STATUS
@@ -154,21 +176,9 @@ async def semak_rekod(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     context.user_data["step"] = "semak_id"
-    await update.message.reply_text("📋 Sila masukkan ID Aduan anda\n\nContoh: A0023")
-
-
-# ==================================================
-# PILIH BULAN LAPORAN
-# ==================================================
-async def pilih_bulan_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Tidak dibenarkan.")
-        return
-
-    context.user_data["step"] = "pilih_bulan"
 
     await update.message.reply_text(
-        "📅 Masukkan bulan laporan dalam format:\n\nMM/YYYY\nContoh: 02/2026"
+        "📋 Sila masukkan ID Aduan anda\n\nContoh: A0023"
     )
 
 
@@ -179,7 +189,17 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     step = context.user_data.get("step")
 
-    if step == "semak_id":
+    if step == "lokasi":
+        context.user_data["lokasi"] = update.message.text
+        context.user_data["step"] = "keterangan"
+        await update.message.reply_text("📝 Sila terangkan masalah / kerosakan:")
+
+    elif step == "keterangan":
+        context.user_data["keterangan"] = update.message.text
+        context.user_data["step"] = "gambar"
+        await update.message.reply_text("📸 Sila hantar 1 gambar kerosakan (wajib).")
+
+    elif step == "semak_id":
         id_cari = update.message.text.strip().upper()
         records = sheet.get_all_values()
 
@@ -199,105 +219,66 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data.clear()
 
-    elif step == "pilih_bulan":
-        bulan_pilih = update.message.text.strip()
-        await jana_laporan_pdf(update, bulan_pilih)
-        context.user_data.clear()
-
 
 # ==================================================
-# JANA PDF (VERSI FINAL STABIL)
+# GAMBAR (ASAL)
 # ==================================================
-async def jana_laporan_pdf(update, bulan_pilih):
+async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if context.user_data.get("step") != "gambar":
+        return
+
+    user = update.effective_user
+    photo = update.message.photo[-1]
+    file = await photo.get_file()
+
+    filename = f"{user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+    await file.download_to_drive(filename)
+
+    blob = bucket.blob(f"aduan/{filename}")
+    blob.upload_from_filename(filename, content_type="image/jpeg")
+
+    image_url = blob.generate_signed_url(version="v4", expiration=60*60*24*7, method="GET")
+    os.remove(filename)
+
+    tz = pytz.timezone("Asia/Kuala_Lumpur")
+    now = datetime.now(tz)
+
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+    tarikh = now.strftime("%d/%m/%Y")
+    masa = now.strftime("%I:%M %p")
 
     records = sheet.get_all_values()
-    data_bulan = [row for row in records[1:] if bulan_pilih in row[2]]
+    total = len(records)
+    id_aduan = f"A{str(total).zfill(4)}"
 
-    filename_pdf = f"Laporan_{bulan_pilih.replace('/','_')}.pdf"
-    doc = SimpleDocTemplate(filename_pdf, pagesize=A4)
-    elements = []
-    styles = getSampleStyleSheet()
-
-    elements.append(Paragraph("<b>LAPORAN ADUAN KEROSAKAN SK LABU BESAR</b>", styles["Title"]))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(f"Bulan: {bulan_pilih}", styles["Normal"]))
-    elements.append(Paragraph(f"Jumlah Aduan: {len(data_bulan)}", styles["Normal"]))
-    elements.append(Spacer(1, 20))
-
-    for row in data_bulan:
-
-        aduan_block = []
-
-        aduan_block.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
-        aduan_block.append(Spacer(1, 6))
-        aduan_block.append(Paragraph(f"ID Aduan : {row[0]}", styles["Normal"]))
-        aduan_block.append(Paragraph(f"Tarikh   : {row[2]}", styles["Normal"]))
-        aduan_block.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
-        aduan_block.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
-        aduan_block.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
-        aduan_block.append(Spacer(1, 8))
-
-        try:
-            image_url = row[10]
-
-            parsed = urlparse(image_url)
-            clean_path = unquote(parsed.path).lstrip("/")
-            clean_path = clean_path.replace("relief-31bc6.firebasestorage.app/", "")
-
-            blob = bucket.blob(clean_path)
-            image_bytes = blob.download_as_bytes()
-
-            image_stream = BytesIO(image_bytes)
-            img = Image(image_stream, width=180, height=120)
-            aduan_block.append(img)
-
-        except Exception as e:
-            print("ERROR GAMBAR:", e)
-            aduan_block.append(
-                Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"])
-            )
-
-        aduan_block.append(Spacer(1, 15))
-        aduan_block.append(Paragraph("--------------------------------------------------", styles["Normal"]))
-        aduan_block.append(Spacer(1, 20))
-
-    # 🔥 INI PENTING
-        elements.append(KeepTogether(aduan_block))
-
-
-    doc.build(
-        elements,
-        onFirstPage=add_footer,
-        onLaterPages=add_footer
+    sheet.insert_row(
+        [
+            id_aduan,
+            timestamp,
+            tarikh,
+            masa,
+            user.full_name,
+            user.id,
+            context.user_data.get("kategori"),
+            context.user_data.get("lokasi"),
+            context.user_data.get("keterangan"),
+            '=IMAGE(INDIRECT("K"&ROW()))',
+            image_url,
+            "Dalam proses"
+        ],
+        index=2,
+        value_input_option="USER_ENTERED"
     )
 
+    context.user_data.clear()
 
-    await update.message.reply_document(document=open(filename_pdf, "rb"))
-    os.remove(filename_pdf)
-
-def add_footer(canvas_obj, doc):
-    canvas_obj.saveState()
-
-    footer_text_1 = "Sinergi Ke Arah Lonjakan Bestari"
-    footer_text_2 = "#LabuBest"
-
-    width, height = A4
-
-    canvas_obj.setFont("Helvetica", 9)
-
-    # Garisan atas footer
-    canvas_obj.line(40, 60, width - 40, 60)
-
-    # Text footer
-    canvas_obj.drawCentredString(width / 2, 45, footer_text_1)
-    canvas_obj.drawCentredString(width / 2, 35, footer_text_2)
-
-    # Nombor muka surat
-    page_number_text = f"Halaman {doc.page}"
-    canvas_obj.drawRightString(width - 40, 25, page_number_text)
-
-    canvas_obj.restoreState()
-
+    await update.message.reply_text(
+        f"✅ Aduan berjaya direkod\n\n"
+        f"🆔 ID Aduan : {id_aduan}\n"
+        f"📅 Tarikh   : {tarikh}\n"
+        f"⏰ Masa     : {masa}"
+    )
 
 
 # ==================================================
@@ -307,12 +288,15 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
+    app.add_handler(MessageHandler(filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
+    app.add_handler(MessageHandler(filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
+    app.add_handler(MessageHandler(filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod))
+
+    app.add_handler(CallbackQueryHandler(kategori_callback))
+
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    app.add_handler(MessageHandler(filters.PHOTO, gambar))
 
     print("🤖 Bot Aduan Kerosakan sedang berjalan...")
     app.run_polling()
