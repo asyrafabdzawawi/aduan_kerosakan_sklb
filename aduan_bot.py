@@ -51,30 +51,34 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 # ==================================================
 # PAPAR MENU UTAMA (INLINE + TEKS ARAHAN BERASINGAN)
 # ==================================================
+# ==================================================
+# PAPAR MENU UTAMA (INLINE SAHAJA - TIADA BUTTON BAWAH)
+# ==================================================
 async def papar_menu(update, context):
-    # REPLY KEYBOARD (BAWAH TYPING - 1 BUTANG SAHAJA)
-    reply_keyboard = [[KeyboardButton("🏠 Menu Utama")]]
-    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
-    # INLINE MENU
     keyboard = [
         [InlineKeyboardButton("🛠️ Buat Aduan Kerosakan", callback_data="menu|aduan")],
         [InlineKeyboardButton("📋 Semak Status Aduan", callback_data="menu|status")]
     ]
 
-    # MESEJ 1 — MENU UTAMA DENGAN INLINE BUTTON
-    await update.message.reply_text(
-        "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
-        "Sila pilih menu di bawah:\n",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
+    # Jika dari /start atau text
+    if update.message:
+        await update.message.reply_text(
+            "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
+            "Sila pilih menu di bawah:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
 
-    # MESEJ 2 — TEKS ARAHAN SAHAJA (TANPA BUTTON)
-    await update.message.reply_text(
-        "🏠 Sila tekan butang di bawah untuk kembali ke menu utama.",
-        reply_markup=reply_markup
-    )
+    # Jika dari callback (nak kembali ke menu)
+    elif update.callback_query:
+        await update.callback_query.edit_message_text(
+            "🤖 *Sistem Aduan Kerosakan SK Labu Besar*\n\n"
+            "Sila pilih menu di bawah:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+
 
 
 
@@ -272,7 +276,7 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🏠 Menu Utama$"), menu_utama))
+    
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.add_handler(MessageHandler(filters.PHOTO, gambar))
