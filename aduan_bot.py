@@ -252,20 +252,25 @@ async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Formula dinamik ikut row semasa
         image_formula = '=IMAGE(INDIRECT("K"&ROW()))'
 
-        sheet.insert_row([
-            id_aduan,
-            timestamp,
-            tarikh,
-            masa,
-            user.full_name,
-            user.id,
-            context.user_data.get("kategori"),
-            context.user_data.get("lokasi"),
-            context.user_data.get("keterangan"),
-            image_formula,     # Column J → Preview
-            image_url,         # Column K → Link
-            "Dalam proses"     # Column L → Status
-        ], index=insert_index)
+       sheet.insert_row(
+            [
+                id_aduan,
+                timestamp,
+                tarikh,
+                masa,
+                user.full_name,
+                user.id,
+                context.user_data.get("kategori"),
+                context.user_data.get("lokasi"),
+                context.user_data.get("keterangan"),
+                '=IMAGE(INDIRECT("K"&ROW()))',
+                image_url,
+                "Dalam proses"
+            ],
+            index=insert_index,
+            value_input_option="USER_ENTERED"
+        )
+
 
         context.user_data.clear()
 
