@@ -1,15 +1,11 @@
 import pytz
 import os
 import json
-import requests
 from io import BytesIO
-from reportlab.platypus import Image
-from reportlab.lib.utils import ImageReader
-
 from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 import firebase_admin
 from firebase_admin import credentials, storage
@@ -18,13 +14,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # PDF IMPORT
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import TableStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.lib.utils import ImageReader
 
 
 # ==================================================
@@ -76,7 +73,7 @@ KATEGORI_LIST = ["Elektrik", "ICT", "Paip", "Perabot", "Bangunan", "Lain-lain"]
 
 
 # ==================================================
-# PAPAR MENU UTAMA
+# PAPAR MENU
 # ==================================================
 async def papar_menu(update, context):
 
@@ -136,31 +133,7 @@ async def semak_status_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# ADMIN – SEMAK REKOD
-# ==================================================
-async def semak_rekod_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    user_id = update.effective_user.id
-
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Anda tidak dibenarkan akses menu ini.")
-        return
-
-    sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
-
-    keyboard = [
-        [InlineKeyboardButton("📊 Buka Google Sheet", url=sheet_url)]
-    ]
-
-    await update.message.reply_text(
-        "📊 *Rekod Aduan Kerosakan*\n\nKlik butang di bawah:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
-
-
-# ==================================================
-# PILIH BULAN UNTUK LAPORAN
+# PILIH BULAN LAPORAN
 # ==================================================
 async def pilih_bulan_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -181,6 +154,7 @@ async def pilih_bulan_laporan(update: Update, context: ContextTypes.DEFAULT_TYPE
 # TEXT FLOW
 # ==================================================
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     step = context.user_data.get("step")
 
     if step == "lokasi":
@@ -191,7 +165,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif step == "keterangan":
         context.user_data["keterangan"] = update.message.text
         context.user_data["step"] = "gambar"
-        await update.message.reply_text("📸 Sila hantar **1 gambar** kerosakan (wajib).", parse_mode="Markdown")
+        await update.message.reply_text("📸 Sila hantar 1 gambar kerosakan (wajib).")
 
     elif step == "semak_id":
         id_cari = update.message.text.strip().upper()
@@ -219,14 +193,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================================
-# JANA PDF LAPORAN
+# JANA PDF (STABIL FIREBASE)
 # ==================================================
 async def jana_laporan_pdf(update, bulan_pilih):
-
-    from reportlab.platypus import Image
-    from reportlab.lib.utils import ImageReader
-    import requests
-    from io import BytesIO
 
     records = sheet.get_all_values()
     data_bulan = []
@@ -242,8 +211,8 @@ async def jana_laporan_pdf(update, bulan_pilih):
         kategori = row[6]
         kategori_count[kategori] = kategori_count.get(kategori, 0) + 1
 
-    filename = f"Laporan_{bulan_pilih.replace('/','_')}.pdf"
-    doc = SimpleDocTemplate(filename, pagesize=A4)
+    filename_pdf = f"Laporan_{bulan_pilih.replace('/','_')}.pdf"
+    doc = SimpleDocTemplate(filename_pdf, pagesize=A4)
     elements = []
     styles = getSampleStyleSheet()
 
@@ -253,24 +222,19 @@ async def jana_laporan_pdf(update, bulan_pilih):
     elements.append(Paragraph(f"Jumlah Aduan: {jumlah}", styles["Normal"]))
     elements.append(Spacer(1, 20))
 
-    # ==============================
-    # CARTA
-    # ==============================
-    drawing = Drawing(400, 200)
-    chart = VerticalBarChart()
-    chart.x = 50
-    chart.y = 50
-    chart.height = 125
-    chart.width = 300
-    chart.data = [list(kategori_count.values())]
-    chart.categoryAxis.categoryNames = list(kategori_count.keys())
-    drawing.add(chart)
-    elements.append(drawing)
-    elements.append(Spacer(1, 30))
+    if kategori_count:
+        drawing = Drawing(400, 200)
+        chart = VerticalBarChart()
+        chart.x = 50
+        chart.y = 50
+        chart.height = 125
+        chart.width = 300
+        chart.data = [list(kategori_count.values())]
+        chart.categoryAxis.categoryNames = list(kategori_count.keys())
+        drawing.add(chart)
+        elements.append(drawing)
+        elements.append(Spacer(1, 30))
 
-    # ==============================
-    # DETAIL SETIAP ADUAN
-    # ==============================
     for row in data_bulan:
 
         elements.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
@@ -285,29 +249,32 @@ async def jana_laporan_pdf(update, bulan_pilih):
         elements.append(Paragraph(f"Status   : {row[11]}", styles["Normal"]))
         elements.append(Spacer(1, 10))
 
-        # ==============================
-        # GAMBAR
-        # ==============================
         try:
             image_url = row[10]
-            response = requests.get(image_url)
-            img = ImageReader(BytesIO(response.content))
+            file_part = image_url.split("/aduan/")[1]
+            filename_image = file_part.split("?")[0]
+
+            blob = bucket.blob(f"aduan/{filename_image}")
+            image_bytes = blob.download_as_bytes()
+
+            img = ImageReader(BytesIO(image_bytes))
             image = Image(img, width=300, height=200)
             elements.append(image)
-        except:
+
+        except Exception as e:
+            print("ERROR GAMBAR:", e)
             elements.append(Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"]))
 
         elements.append(Spacer(1, 30))
 
     doc.build(elements)
 
-    await update.message.reply_document(document=open(filename, "rb"))
-    os.remove(filename)
-
+    await update.message.reply_document(document=open(filename_pdf, "rb"))
+    os.remove(filename_pdf)
 
 
 # ==================================================
-# IMAGE HANDLER (KEKAL ASAL)
+# IMAGE HANDLER (ASAL)
 # ==================================================
 async def gambar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -380,7 +347,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🛠️ Buat Aduan Kerosakan$"), buat_aduan_text))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋 Semak Status Aduan$"), semak_status_text))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊 Semak Rekod Aduan$"), semak_rekod_admin))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📄 Laporan Bulanan PDF$"), pilih_bulan_laporan))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
