@@ -1,6 +1,11 @@
 import pytz
 import os
 import json
+import requests
+from io import BytesIO
+from reportlab.platypus import Image
+from reportlab.lib.utils import ImageReader
+
 from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
@@ -218,6 +223,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==================================================
 async def jana_laporan_pdf(update, bulan_pilih):
 
+    from reportlab.platypus import Image
+    from reportlab.lib.utils import ImageReader
+    import requests
+    from io import BytesIO
+
     records = sheet.get_all_values()
     data_bulan = []
 
@@ -243,7 +253,9 @@ async def jana_laporan_pdf(update, bulan_pilih):
     elements.append(Paragraph(f"Jumlah Aduan: {jumlah}", styles["Normal"]))
     elements.append(Spacer(1, 20))
 
-    # Carta
+    # ==============================
+    # CARTA
+    # ==============================
     drawing = Drawing(400, 200)
     chart = VerticalBarChart()
     chart.x = 50
@@ -254,25 +266,44 @@ async def jana_laporan_pdf(update, bulan_pilih):
     chart.categoryAxis.categoryNames = list(kategori_count.keys())
     drawing.add(chart)
     elements.append(drawing)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 30))
 
-    # Senarai Aduan
-    table_data = [["ID", "Tarikh", "Kategori", "Lokasi", "Status"]]
+    # ==============================
+    # DETAIL SETIAP ADUAN
+    # ==============================
     for row in data_bulan:
-        table_data.append([row[0], row[2], row[6], row[7], row[11]])
 
-    table = Table(table_data, repeatRows=1)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-        ("GRID", (0,0), (-1,-1), 1, colors.grey),
-        ("FONTSIZE", (0,0), (-1,-1), 8)
-    ]))
+        elements.append(Paragraph("<b>MAKLUMAT ADUAN</b>", styles["Heading3"]))
+        elements.append(Spacer(1, 6))
 
-    elements.append(table)
+        elements.append(Paragraph(f"ID Aduan : {row[0]}", styles["Normal"]))
+        elements.append(Paragraph(f"Tarikh   : {row[2]}", styles["Normal"]))
+        elements.append(Paragraph(f"Masa     : {row[3]}", styles["Normal"]))
+        elements.append(Paragraph(f"Kategori : {row[6]}", styles["Normal"]))
+        elements.append(Paragraph(f"Lokasi   : {row[7]}", styles["Normal"]))
+        elements.append(Paragraph(f"Keterangan : {row[8]}", styles["Normal"]))
+        elements.append(Paragraph(f"Status   : {row[11]}", styles["Normal"]))
+        elements.append(Spacer(1, 10))
+
+        # ==============================
+        # GAMBAR
+        # ==============================
+        try:
+            image_url = row[10]
+            response = requests.get(image_url)
+            img = ImageReader(BytesIO(response.content))
+            image = Image(img, width=300, height=200)
+            elements.append(image)
+        except:
+            elements.append(Paragraph("Gambar tidak dapat dipaparkan.", styles["Normal"]))
+
+        elements.append(Spacer(1, 30))
+
     doc.build(elements)
 
     await update.message.reply_document(document=open(filename, "rb"))
     os.remove(filename)
+
 
 
 # ==================================================
