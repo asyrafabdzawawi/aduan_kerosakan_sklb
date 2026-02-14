@@ -4,6 +4,9 @@ import json
 from io import BytesIO
 from datetime import datetime
 from urllib.parse import urlparse, unquote
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
+
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
@@ -182,7 +185,7 @@ async def jana_laporan_pdf(update, bulan_pilih):
     elements = []
     styles = getSampleStyleSheet()
 
-    elements.append(Paragraph("<b>LAPORAN ADUAN KEROSAKAN</b>", styles["Title"]))
+    elements.append(Paragraph("<b>LAPORAN ADUAN KEROSAKAN SK LABU BESAR</b>", styles["Title"]))
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(f"Bulan: {bulan_pilih}", styles["Normal"]))
     elements.append(Paragraph(f"Jumlah Aduan: {len(data_bulan)}", styles["Normal"]))
@@ -227,6 +230,32 @@ async def jana_laporan_pdf(update, bulan_pilih):
 
     await update.message.reply_document(document=open(filename_pdf, "rb"))
     os.remove(filename_pdf)
+
+def add_footer(canvas_obj, doc):
+    canvas_obj.saveState()
+
+    footer_text_1 = "Sistem Aduan Kerosakan SK Labu Besar"
+    footer_text_2 = "Sinergi Ke Arah Lonjakan Bestari"
+    footer_text_3 = "#LabuBest"
+
+    width, height = A4
+
+    canvas_obj.setFont("Helvetica", 9)
+
+    # Garisan atas footer
+    canvas_obj.line(40, 60, width - 40, 60)
+
+    # Text footer
+    canvas_obj.drawCentredString(width / 2, 45, footer_text_1)
+    canvas_obj.drawCentredString(width / 2, 35, footer_text_2)
+    canvas_obj.drawCentredString(width / 2, 25, footer_text_3)
+
+    # Nombor muka surat
+    page_number_text = f"Halaman {doc.page}"
+    canvas_obj.drawRightString(width - 40, 25, page_number_text)
+
+    canvas_obj.restoreState()
+
 
 
 # ==================================================
